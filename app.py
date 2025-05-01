@@ -155,10 +155,40 @@ else:
 
         if predict_button:
             df = pd.DataFrame(patients_data)
-            predictions = model.predict(df)
+            
+            # Custom risk logic
+            custom_risks = []
+            for index, row in df.iterrows():
+                risk = 0
+                bmi = row["BMI"]
+                age = row["Age"]
+                insulin = row["Insulin"]
+                
+                # 50%: BMI > 26 and rest normal
+                if bmi > 26 and all([
+                    70 <= row["Glucose"] <= 99,
+                    70 <= row["BloodPressure"] <= 120,
+                    10 <= row["SkinThickness"] <= 30,
+                    2 <= insulin <= 25,
+                    0 <= row["Pregnancies"] <= 10,
+                    0.0 <= row["DiabetesPedigreeFunction"] <= 1.0
+                ]):
+                    risk = 50
+                # 80%: BMI > 26 and Age > 40
+                elif bmi > 26 and age > 40:
+                    risk = 80
+                # 60%: BMI > 26 and Insulin high
+                elif insulin > 25 and bmi > 26:
+                    risk = 60
+                else:
+                    # Default: use model prediction
+                    model_prediction = model.predict(pd.DataFrame([row]))[0]
+                    risk = model_prediction * 100
+
+                custom_risks.append(risk)
 
             df['Patient Name'] = names
-            df['Risk (%)'] = predictions * 100
+            df['Risk (%)'] = custom_risks
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
