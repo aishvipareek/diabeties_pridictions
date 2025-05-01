@@ -78,58 +78,37 @@ if mode == "Static (Upload File)":
     st.markdown("<p style='text-align: center; font-size: 18px;'>Upload trained dataset and new dataset to compare</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    train_file = st.file_uploader("Upload Trained CSV File", type=["csv"], key="trained")
-    new_file = st.file_uploader("Upload New CSV File", type=["csv"], key="new")
+    uploaded_file = st.file_uploader("📤 Upload Combined Year-wise Patient Data CSV", type=["csv"], key="yearwise_csv")
 
-    if train_file and new_file:
-        train_data = pd.read_csv(train_file)
-        new_data = pd.read_csv(new_file)
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
 
-        new_data = new_data.rename(columns={
+        df = df.rename(columns={
             "Blood Pressure": "BloodPressure",
             "Diabetes Pedigree Function": "DiabetesPedigreeFunction"
         })
 
-        common_columns = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction']
-        parameter = st.selectbox("Select Parameter for Comparison", common_columns)
-        graph_type = st.selectbox("Select Graph Type", ["Box Plot", "Bar Chart", "Scatter Plot"])
+        if "Year" in df.columns and "Patient Name" in df.columns:
+            parameter_options = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
+            selected_param = st.selectbox("📌 Select Parameter to View Trends", parameter_options)
 
-        if parameter in train_data.columns and parameter in new_data.columns:
-            comparison_df = pd.DataFrame({
-                "Dataset": ["Trained"] * len(train_data) + ["New"] * len(new_data),
-                parameter: list(train_data[parameter]) + list(new_data[parameter]),
-                "Patient Name": [""] * len(train_data) + list(new_data.get("Patient Name", ["Unknown"] * len(new_data)))
-            })
-
-            if graph_type == "Box Plot":
-                fig = px.box(comparison_df, x="Dataset", y=parameter, color="Dataset",
-                             title=f"Box Plot Comparison of {parameter}",
-                             template="plotly_dark", hover_data=["Patient Name"])
-            elif graph_type == "Bar Chart":
-                fig = px.bar(comparison_df, x="Dataset", y=parameter, color="Dataset",
-                             title=f"Bar Chart Comparison of {parameter}",
-                             template="plotly_dark", hover_data=["Patient Name"])
-            else:
-                fig = px.scatter(comparison_df, x="Dataset", y=parameter, color="Dataset",
-                                 title=f"Scatter Plot Comparison of {parameter}",
-                                 template="plotly_dark", hover_data=["Patient Name"])
-
+            fig = px.line(
+                df,
+                x="Year",
+                y=selected_param,
+                color="Patient Name",
+                markers=True,
+                title=f"📈 Year-wise Trend for {selected_param}",
+                template="plotly_dark"
+            )
             fig.update_layout(
-                xaxis_title="Dataset",
-                yaxis_title=f"{parameter} Values",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=True),
+                xaxis_title="Year",
+                yaxis_title=selected_param,
                 title_font=dict(size=20)
             )
             st.plotly_chart(fig, use_container_width=True)
-
-            st.markdown(f"### Summary Statistics for {parameter}")
-            st.write("Trained Dataset Stats:")
-            st.write(train_data[parameter].describe())
-            st.write("New Dataset Stats:")
-            st.write(new_data[parameter].describe())
         else:
-            st.error(f"The selected parameter '{parameter}' is missing in one of the files.")
+            st.error("Uploaded file must contain 'Year' and 'Patient Name' columns.")
 
 # Dynamic Mode
 else:
