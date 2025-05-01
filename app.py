@@ -131,14 +131,6 @@ if mode == "Static (Upload File)":
             st.write(train_data[parameter].describe())
             st.write("New Dataset Stats:")
             st.write(new_data[parameter].describe())
-        else:
-            st.error(f"The selected parameter '{parameter}' is missing in one of the files.")
-
-# Function to Normalize Risk Values for Graph
-def normalize_risk_values(df):
-    # Normalize the Risk (%) to be between 0 and 100
-    df['Risk (%)'] = df['Risk (%)'].apply(lambda x: min(100, max(0, x)))
-    return df
 
 # Dynamic Mode (with prediction)
 elif mode == "Dynamic (Multiple Patients)":
@@ -191,7 +183,7 @@ elif mode == "Dynamic (Multiple Patients)":
             df['Risk (%)'] = predictions * 100
 
             # Normalize Risk Values
-            df = normalize_risk_values(df)
+            df['Risk (%)'] = df['Risk (%)'].apply(lambda x: min(100, max(0, x)))
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
