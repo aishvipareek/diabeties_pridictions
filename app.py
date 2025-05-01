@@ -1,61 +1,41 @@
-import joblib
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
+import numpy as np
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.preprocessing import StandardScaler
 import streamlit as st
+import plotly.express as px
 
 # Set Streamlit page config
 st.set_page_config(page_title="Diabetes Predictor", layout="wide", page_icon="🩺")
 
-# Load the trained model and check if it's loaded correctly
-try:
-    model = joblib.load("random_forest_diabetes_model.pkl")
-    st.success("Model has been successfully loaded!")
-except FileNotFoundError:
-    st.error("Model file not found. Please make sure the model file is in the correct directory.")
+# Data Loading Function
+def load_data(file):
+    data = pd.read_csv(file)
+    return data
 
-# Custom Dark Theme CSS
-st.markdown("""
-    <style>
-    .stApp {
-        background-color: #412232;
-        color: #DB9F75;
-    }
-    h1, h2, h3, h4 {
-        color: #A3E241;
-    }
-    .stButton>button {
-        background-color: #A3E241;
-        color: #2F3A32;
-        font-weight: bold;
-        border-radius: 10px;
-        transition: 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #DB9F75;
-        color: #2F3A32;
-    }
-    .stAlert {
-        color: #ffffff !important;
-        background-color: #545748 !important;
-        border-left: 0.3rem solid #A3E241 !important;
-    }
-    section[data-testid="stSidebar"] {
-        background-color: #2F3A32 !important;
-        color: white;
-        padding: 20px;
-    }
-    section[data-testid="stSidebar"] h2 {
-        color: #DB9F75;
-    }
-    section[data-testid="stSidebar"] p {
-        color: #ffffff;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Model Training Function
+def train_model(X_train, y_train):
+    model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+    model.fit(X_train, y_train)
+    return model
 
-# Sidebar mode selector and safe ranges
+# Data Preprocessing
+def preprocess_data(data):
+    X = data.drop('Outcome', axis=1)
+    y = data['Outcome']
+    
+    # Fill missing values with the mean of the column
+    X = X.fillna(X.mean())
+    
+    # Scaling the features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    return X_scaled, y
+
+# Sidebar Configuration
 with st.sidebar:
     st.markdown("<h2>📝 Multiple Patient Diabetes Risk</h2>", unsafe_allow_html=True)
     mode = st.radio("📊 Select Data Mode", ["Static (Upload File)", "Dynamic (Multiple Patients)"])
@@ -78,37 +58,34 @@ if mode == "Static (Upload File)":
     st.markdown("<p style='text-align: center; font-size: 18px;'>Upload trained dataset and new dataset to compare</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    uploaded_file = st.file_uploader("📤 Upload Combined Year-wise Patient Data CSV", type=["csv"], key="yearwise_csv")
+    uploaded_file = st.file_uploader("📤 Upload Diabetes Dataset CSV", type=["csv"], key="dataset_csv")
 
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+        data = load_data(uploaded_file)
+        st.write(data.head())
 
-        df = df.rename(columns={
-            "Blood Pressure": "BloodPressure",
-            "Diabetes Pedigree Function": "DiabetesPedigreeFunction"
-        })
+        # Preprocess the data
+        X_scaled, y = preprocess_data(data)
 
-        if "Year" in df.columns and "Patient Name" in df.columns:
-            parameter_options = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
-            selected_param = st.selectbox("📌 Select Parameter to View Trends", parameter_options)
+        # Split the data into training and testing
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-            fig = px.line(
-                df,
-                x="Year",
-                y=selected_param,
-                color="Patient Name",
-                markers=True,
-                title=f"📈 Year-wise Trend for {selected_param}",
-                template="plotly_dark"
-            )
-            fig.update_layout(
-                xaxis_title="Year",
-                yaxis_title=selected_param,
-                title_font=dict(size=20)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("Uploaded file must contain 'Year' and 'Patient Name' columns.")
+        # Train the XGBoost model
+        model = train_model(X_train, y_train)
+
+        # Model Evaluation
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+
+        # Confusion Matrix and Classification Report
+        cm = confusion_matrix(y_test, y_pred)
+        st.write("Confusion Matrix:")
+        st.write(cm)
+
+        report = classification_report(y_test, y_pred)
+        st.write("Classification Report:")
+        st.text(report)
 
 # Dynamic Mode
 else:
@@ -154,34 +131,22 @@ else:
         predict_button = st.button("🔮 Predict Diabetes Risk")
 
         if predict_button:
-            df_input = pd.DataFrame(patients_data)
-            # Predicting diabetes risk using the model
-            predictions = model.predict_proba(df_input)[:, 1]  # Get probability for the diabetic class
-            st.write("Model prediction probabilities:", predictions)  # Debugging output for probabilities
+            df = pd.DataFrame(patients_data)
+            # Preprocess the dynamic input data
+            X_scaled, _ = preprocess_data(df)
 
-            # Apply custom risk logic to adjust the predictions
-            adjusted_predictions = []
-            for i, patient_data in df_input.iterrows():
-                bmi = patient_data['BMI']
-                age = patient_data['Age']
-                insulin = patient_data['Insulin']
+            # Train the XGBoost model (using the data already available)
+            model = train_model(X_scaled, y)
 
-                # Custom risk logic:
-                if bmi > 26 and glucose < 100 and bp < 120 and insulin < 25:  # If only BMI is high
-                    adjusted_predictions.append(0.5)
-                elif bmi > 26 and age > 40:  # BMI and Age > 40
-                    adjusted_predictions.append(0.8)
-                elif insulin > 80 and bmi > 26:  # If both insulin and BMI are high
-                    adjusted_predictions.append(0.6)
-                else:
-                    adjusted_predictions.append(predictions[i])
+            # Predicting diabetes risk
+            predictions = model.predict(X_scaled)
 
-            # Displaying the adjusted predictions as percentages
-            df_input['Patient Name'] = names
-            df_input['Risk (%)'] = np.array(adjusted_predictions) * 100  # Convert to percentage
+            df['Patient Name'] = names
+            df['Risk (%)'] = predictions * 100
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
-            fig = px.bar(df_input, x='Patient Name', y='Risk (%)', color='Risk (%)',
+
+            fig = px.bar(df, x='Patient Name', y='Risk (%)', color='Risk (%)',
                          color_continuous_scale='Reds', title="Diabetes Risk per Patient",
                          labels={'Risk (%)': 'Diabetes Risk (%)'}, template="plotly_dark")
 
