@@ -176,10 +176,12 @@ else:
 
         if predict_button:
             df = pd.DataFrame(patients_data)
-            predictions = model.predict(df)
+            # Get prediction probabilities from the model
+            probabilities = model.predict_proba(df)[:, 1]  # Get probability of class 1 (diabetes)
 
+            # Calculate risk percentage
+            df['Risk (%)'] = probabilities * 100
             df['Patient Name'] = names
-            df['Risk (%)'] = predictions * 100
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
