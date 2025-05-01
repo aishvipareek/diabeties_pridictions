@@ -6,9 +6,9 @@ import plotly.express as px
 import streamlit as st
 
 # Set Streamlit page config
-st.set_page_config(page_title="Diabetes Predictor", layout="wide", page_icon="🪺")
+st.set_page_config(page_title="Diabetes Predictor", layout="wide", page_icon="🩺")
 
-# Load the trained model
+# Load the trained model and check if it's loaded correctly
 try:
     model = joblib.load("random_forest_diabetes_model.pkl")
     st.success("Model has been successfully loaded!")
@@ -55,7 +55,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Sidebar mode selector and normal ranges
+# Sidebar mode selector and safe ranges
 with st.sidebar:
     st.markdown("<h2>📝 Multiple Patient Diabetes Risk</h2>", unsafe_allow_html=True)
     mode = st.radio("📊 Select Data Mode", ["Static (Upload File)", "Dynamic (Multiple Patients)"])
@@ -78,7 +78,7 @@ if mode == "Static (Upload File)":
     st.markdown("<p style='text-align: center; font-size: 18px;'>Upload trained dataset and new dataset to compare</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    uploaded_file = st.file_uploader("📄 Upload Combined Year-wise Patient Data CSV", type=["csv"], key="yearwise_csv")
+    uploaded_file = st.file_uploader("📤 Upload Combined Year-wise Patient Data CSV", type=["csv"], key="yearwise_csv")
 
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
@@ -121,7 +121,7 @@ else:
     names = []
 
     for i in range(num_patients):
-        st.subheader(f"📿 Patient {i+1} Details")
+        st.subheader(f"📟 Patient {i+1} Details")
         patient_name = st.text_input(f"Enter Name of Patient {i+1}", f"Patient {i+1}", key=f"name{i}")
         gender = st.radio(f"Select Gender (Patient {i+1})", ["Male", "Female"], horizontal=True, key=f"gender{i}")
 
@@ -155,35 +155,24 @@ else:
 
         if predict_button:
             df = pd.DataFrame(patients_data)
-            df['Patient Name'] = names
 
-            custom_risks = []
-            for index, row in df.iterrows():
-                risk = 0
-                bmi = row["BMI"]
-                age = row["Age"]
-                insulin = row["Insulin"]
+            # Apply Custom Risk Logic:
+            custom_risk = []
 
-                if bmi > 26 and all([
-                    70 <= row["Glucose"] <= 99,
-                    70 <= row["BloodPressure"] <= 120,
-                    10 <= row["SkinThickness"] <= 30,
-                    2 <= insulin <= 25,
-                    0 <= row["Pregnancies"] <= 10,
-                    0.0 <= row["DiabetesPedigreeFunction"] <= 1.0
-                ]):
-                    risk = 50
-                elif bmi > 26 and age > 40:
-                    risk = 80
-                elif insulin > 25 and bmi > 26:
-                    risk = 60
+            for i, row in df.iterrows():
+                if row['BMI'] > 26 and row['Glucose'] <= 140 and row['BloodPressure'] <= 120 and row['Insulin'] <= 100 and row['Age'] <= 60:
+                    custom_risk.append(50)
+                elif row['BMI'] > 26 and row['Age'] > 40:
+                    custom_risk.append(80)
+                elif row['Insulin'] > 100 and row['BMI'] > 26:
+                    custom_risk.append(60)
                 else:
-                    model_prediction = model.predict(pd.DataFrame([row]))[0]
-                    risk = 70 if model_prediction == 1 else 30
+                    # If custom conditions don't apply, use model's prediction (0 or 1)
+                    prediction = model.predict([row])[0]
+                    custom_risk.append(100 if prediction == 1 else 0)
 
-                custom_risks.append(risk)
-
-            df['Risk (%)'] = custom_risks
+            df['Patient Name'] = names
+            df['Risk (%)'] = custom_risk
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
