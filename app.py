@@ -141,7 +141,7 @@ def normalize_risk_values(df):
     return df
 
 # Dynamic Mode (with prediction)
-else:
+elif mode == "Dynamic (Multiple Patients)":
     st.markdown("<h1 style='text-align: center;'>💉 Diabetes Risk Predictor</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 18px;'>Compare multiple patients' diabetes risks using AI-powered insights</p>", unsafe_allow_html=True)
     st.markdown("---")
