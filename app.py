@@ -1,114 +1,81 @@
-import joblib
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
+import pickle
 
-# Set Streamlit page config
-st.set_page_config(page_title="Diabetes Predictor", layout="wide", page_icon="🩺")
+# Load the pre-trained model (ensure your model supports predict_proba)
+model = pickle.load(open('random_forest_diabetes_model.pkl', 'rb'))
 
-# Load the trained model and check if it's loaded correctly
-try:
-    model = joblib.load("random_forest_diabetes_model.pkl")
-    st.success("Model has been successfully loaded!")
-except FileNotFoundError:
-    st.error("Model file not found. Please make sure the model file is in the correct directory.")
+# Streamlit UI
+st.set_page_config(page_title="Diabetes Risk Predictor", page_icon="🍏", layout="wide")
+st.title("🍏 Diabetes Risk Prediction App")
 
-# Custom Dark Theme CSS
-st.markdown("""
-    <style>
-    .stApp {
-        background-color: #412232;
-        color: #DB9F75;
-    }
-    h1, h2, h3, h4 {
-        color: #A3E241;
-    }
-    .stButton>button {
-        background-color: #A3E241;
-        color: #2F3A32;
-        font-weight: bold;
-        border-radius: 10px;
-        transition: 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #DB9F75;
-        color: #2F3A32;
-    }
-    .stAlert {
-        color: #ffffff !important;
-        background-color: #545748 !important;
-        border-left: 0.3rem solid #A3E241 !important;
-    }
-    section[data-testid="stSidebar"] {
-        background-color: #2F3A32 !important;
-        color: white;
-        padding: 20px;
-    }
-    section[data-testid="stSidebar"] h2 {
-        color: #DB9F75;
-    }
-    section[data-testid="stSidebar"] p {
-        color: #ffffff;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Sidebar for static mode
+st.sidebar.title("📊 Diabetes Risk Prediction")
+mode = st.sidebar.radio("Select Mode", ("Dynamic Mode", "Static Mode"))
 
-# Sidebar mode selector and safe ranges
-with st.sidebar:
-    st.markdown("<h2>📝 Multiple Patient Diabetes Risk</h2>", unsafe_allow_html=True)
-    mode = st.radio("📊 Select Data Mode", ["Static (Upload File)", "Dynamic (Multiple Patients)"])
-
-    st.markdown("<h3>Normal Ranges</h3>", unsafe_allow_html=True)
-    st.markdown("""
-    - Pregnancies: 0-10<br>
-    - Glucose: 70-99 mg/dL<br>
-    - Blood Pressure: 70-120 mm Hg<br>
-    - Skin Thickness: 10-30 mm<br>
-    - Insulin: 2-25 µU/mL<br>
-    - BMI: 18.5-24.9<br>
-    - Age: 18-100 years<br>
-    - Diabetes Pedigree Function: 0.0-1.0
-    """, unsafe_allow_html=True)
-
-# Static Mode
-if mode == "Static (Upload File)":
+# Static Mode: Single patient input
+if mode == "Static Mode":
     st.markdown("<h1 style='text-align: center;'>💉 Diabetes Risk Predictor</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 18px;'>Upload trained dataset and new dataset to compare</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 18px;'>Predict diabetes risk for a single patient</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    uploaded_file = st.file_uploader("📤 Upload Combined Year-wise Patient Data CSV", type=["csv"], key="yearwise_csv")
+    # Input fields for a single patient
+    patient_name = st.text_input("Enter Patient Name", "Patient 1")
+    gender = st.radio("Select Gender", ["Male", "Female"], horizontal=True)
+    pregnancies = st.number_input("Pregnancies", 0, 20, 1)
+    glucose = st.number_input("Glucose Level", 0, 200, 120)
+    bp = st.number_input("Blood Pressure", 0, 200, 70)
+    skin = st.number_input("Skin Thickness", 0, 100, 20)
+    insulin = st.number_input("Insulin Level", 0, 900, 80)
+    bmi = st.number_input("BMI", 0.0, 50.0, 25.0)
+    age = st.number_input("Age", 18, 100, 25)
+    pedigree = st.number_input("Diabetes Pedigree Function", 0.0, 2.5, 0.5)
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+    # Create a DataFrame for input data
+    input_data = {
+        "Pregnancies": [pregnancies],
+        "Glucose": [glucose],
+        "BloodPressure": [bp],
+        "SkinThickness": [skin],
+        "Insulin": [insulin],
+        "BMI": [bmi],
+        "DiabetesPedigreeFunction": [pedigree],
+        "Age": [age]
+    }
+    df_input = pd.DataFrame(input_data)
 
-        df = df.rename(columns={
-            "Blood Pressure": "BloodPressure",
-            "Diabetes Pedigree Function": "DiabetesPedigreeFunction"
-        })
+    # Prediction button
+    if st.button("🔮 Predict Diabetes Risk"):
+        # Model prediction
+        prediction = model.predict(df_input)
+        probability = model.predict_proba(df_input)[:, 1][0]  # Probability of diabetes
 
-        if "Year" in df.columns and "Patient Name" in df.columns:
-            parameter_options = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
-            selected_param = st.selectbox("📌 Select Parameter to View Trends", parameter_options)
-
-            fig = px.line(
-                df,
-                x="Year",
-                y=selected_param,
-                color="Patient Name",
-                markers=True,
-                title=f"📈 Year-wise Trend for {selected_param}",
-                template="plotly_dark"
-            )
-            fig.update_layout(
-                xaxis_title="Year",
-                yaxis_title=selected_param,
-                title_font=dict(size=20)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        # Risk Calculation
+        if probability > 0.5:
+            risk_percent = round(probability * 100, 2)
         else:
-            st.error("Uploaded file must contain 'Year' and 'Patient Name' columns.")
+            risk_percent = round((1 - probability) * 100, 2)
 
-# Dynamic Mode
+        # Custom Risk Logic
+        if bmi > 26 and insulin <= 25 and age <= 40:
+            risk_percent = 50
+        elif bmi > 26 and age > 40:
+            risk_percent = 80
+        elif insulin > 25 and bmi > 26:
+            risk_percent = 60
+
+        # Show results
+        st.subheader(f"🩺 {patient_name}'s Risk of Diabetes: {risk_percent}%")
+        st.write(f"Model Prediction: {'Diabetic' if prediction == 1 else 'Non-Diabetic'}")
+        st.write(f"Prediction Probability: {probability * 100:.2f}%")
+
+        # Show a bar chart for risk
+        fig = px.bar(x=[patient_name], y=[risk_percent], labels={'x': 'Patient', 'y': 'Risk (%)'}, color=[risk_percent], color_continuous_scale='Reds')
+        fig.update_layout(title=f"{patient_name} - Diabetes Risk", xaxis_title="Patient", yaxis_title="Risk (%)", template="plotly_dark")
+        st.plotly_chart(fig)
+
+# Dynamic Mode: Multiple patients comparison
 else:
     st.markdown("<h1 style='text-align: center;'>💉 Diabetes Risk Predictor</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 18px;'>Compare multiple patients' diabetes risks using AI-powered insights</p>", unsafe_allow_html=True)
@@ -154,24 +121,31 @@ else:
         if predict_button:
             df = pd.DataFrame(patients_data)
 
-            # Apply Custom Risk Logic:
-            custom_risk = []
+            # Get model probabilities (this returns a 2D array)
+            probabilities = model.predict_proba(df)[:, 1]  # Get probabilities for class 1 (diabetes)
 
-            for i, row in df.iterrows():
-                # Custom conditions based on BMI, age, etc.
-                if row['BMI'] > 26 and row['Glucose'] <= 140 and row['BloodPressure'] <= 120 and row['Insulin'] <= 100 and row['Age'] <= 60:
-                    custom_risk.append(50)  # 50% risk if BMI > 26 and other conditions are met
-                elif row['BMI'] > 26 and row['Age'] > 40:
-                    custom_risk.append(80)  # 80% risk if BMI > 26 and Age > 40
-                elif row['Insulin'] > 100 and row['BMI'] > 26:
-                    custom_risk.append(60)  # 60% risk if Insulin > 100 and BMI > 26
+            # Apply custom risk logic
+            risk_percentages = []
+
+            for i, patient in df.iterrows():
+                bmi = patient["BMI"]
+                age = patient["Age"]
+                insulin = patient["Insulin"]
+
+                if bmi > 26 and insulin <= 25 and age <= 40:
+                    risk_percent = 50
+                elif bmi > 26 and age > 40:
+                    risk_percent = 80
+                elif insulin > 25 and bmi > 26:
+                    risk_percent = 60
                 else:
-                    # If custom conditions don't apply, use model's prediction
-                    prediction = model.predict([row])[0]
-                    custom_risk.append(100 if prediction == 1 else 0)  # Convert model output to 100% or 0%
+                    # Get the risk from model output
+                    risk_percent = probabilities[i] * 100
 
+                risk_percentages.append(risk_percent)
+
+            df['Risk (%)'] = risk_percentages
             df['Patient Name'] = names
-            df['Risk (%)'] = custom_risk
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
