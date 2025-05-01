@@ -160,16 +160,17 @@ else:
             custom_risk = []
 
             for i, row in df.iterrows():
+                # Custom conditions based on BMI, age, etc.
                 if row['BMI'] > 26 and row['Glucose'] <= 140 and row['BloodPressure'] <= 120 and row['Insulin'] <= 100 and row['Age'] <= 60:
-                    custom_risk.append(50)
+                    custom_risk.append(50)  # 50% risk if BMI > 26 and other conditions are met
                 elif row['BMI'] > 26 and row['Age'] > 40:
-                    custom_risk.append(80)
+                    custom_risk.append(80)  # 80% risk if BMI > 26 and Age > 40
                 elif row['Insulin'] > 100 and row['BMI'] > 26:
-                    custom_risk.append(60)
+                    custom_risk.append(60)  # 60% risk if Insulin > 100 and BMI > 26
                 else:
-                    # If custom conditions don't apply, use model's prediction (0 or 1)
+                    # If custom conditions don't apply, use model's prediction
                     prediction = model.predict([row])[0]
-                    custom_risk.append(100 if prediction == 1 else 0)
+                    custom_risk.append(100 if prediction == 1 else 0)  # Convert model output to 100% or 0%
 
             df['Patient Name'] = names
             df['Risk (%)'] = custom_risk
