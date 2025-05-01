@@ -85,6 +85,7 @@ if mode == "Static (Upload File)":
         train_data = pd.read_csv(train_file)
         new_data = pd.read_csv(new_file)
 
+        # Renaming columns to ensure consistency
         new_data = new_data.rename(columns={
             "Blood Pressure": "BloodPressure",
             "Diabetes Pedigree Function": "DiabetesPedigreeFunction"
@@ -101,6 +102,7 @@ if mode == "Static (Upload File)":
                 "Patient Name": [""] * len(train_data) + list(new_data.get("Patient Name", ["Unknown"] * len(new_data)))
             })
 
+            # Plotting the graph
             if graph_type == "Box Plot":
                 fig = px.box(comparison_df, x="Dataset", y=parameter, color="Dataset",
                              title=f"Box Plot Comparison of {parameter}",
@@ -123,6 +125,7 @@ if mode == "Static (Upload File)":
             )
             st.plotly_chart(fig, use_container_width=True)
 
+            # Displaying Summary Statistics
             st.markdown(f"### Summary Statistics for {parameter}")
             st.write("Trained Dataset Stats:")
             st.write(train_data[parameter].describe())
@@ -131,7 +134,13 @@ if mode == "Static (Upload File)":
         else:
             st.error(f"The selected parameter '{parameter}' is missing in one of the files.")
 
-# Dynamic Mode
+# Function to Normalize Risk Values for Graph
+def normalize_risk_values(df):
+    # Normalize the Risk (%) to be between 0 and 100
+    df['Risk (%)'] = df['Risk (%)'].apply(lambda x: min(100, max(0, x)))
+    return df
+
+# Dynamic Mode (with prediction)
 else:
     st.markdown("<h1 style='text-align: center;'>💉 Diabetes Risk Predictor</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 18px;'>Compare multiple patients' diabetes risks using AI-powered insights</p>", unsafe_allow_html=True)
@@ -176,25 +185,22 @@ else:
 
         if predict_button:
             df = pd.DataFrame(patients_data)
-            # Get prediction probabilities from the model
-            probabilities = model.predict_proba(df)[:, 1]  # Get probability of class 1 (diabetes)
+            predictions = model.predict(df)
 
-            # Calculate risk percentage
-            df['Risk (%)'] = probabilities * 100
             df['Patient Name'] = names
+            df['Risk (%)'] = predictions * 100
+
+            # Normalize Risk Values
+            df = normalize_risk_values(df)
 
             st.markdown("## 📊 Patient-wise Diabetes Risk Comparison")
 
             fig = px.bar(df, x='Patient Name', y='Risk (%)', color='Risk (%)',
-                         color_continuous_scale='Reds', title="Diabetes Risk per Patient",
-                         labels={'Risk (%)': 'Diabetes Risk (%)'}, template="plotly_dark")
-
+                         color_continuous_scale='Viridis', title="Diabetes Risk per Patient",
+                         labels={"Risk (%)": "Diabetes Risk (%)"})
             fig.update_layout(
                 xaxis_title="Patient",
                 yaxis_title="Risk (%)",
-                coloraxis_colorbar=dict(title="Risk %"),
-                title_font=dict(size=22),
-                yaxis_range=[0, 100]
+                title_font=dict(size=20)
             )
-
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig)
