@@ -1,45 +1,65 @@
-import pandas as pd
+import joblib
 import numpy as np
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.preprocessing import StandardScaler
-import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 import plotly.express as px
+import streamlit as st
 
 # Set Streamlit page config
 st.set_page_config(page_title="Diabetes Predictor", layout="wide", page_icon="🩺")
 
-# Data Loading Function
-def load_data(file):
-    data = pd.read_csv(file)
-    return data
+# Load the trained model and check if it's loaded correctly
+try:
+    model = joblib.load("random_forest_diabetes_model.pkl")
+    st.success("Model has been successfully loaded!")
+except FileNotFoundError:
+    st.error("Model file not found. Please make sure the model file is in the correct directory.")
 
-# Model Training Function
-def train_model(X_train, y_train):
-    model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-    model.fit(X_train, y_train)
-    return model
+# Custom Dark Theme CSS
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #412232;
+        color: #DB9F75;
+    }
+    h1, h2, h3, h4 {
+        color: #A3E241;
+    }
+    .stButton>button {
+        background-color: #A3E241;
+        color: #2F3A32;
+        font-weight: bold;
+        border-radius: 10px;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #DB9F75;
+        color: #2F3A32;
+    }
+    .stAlert {
+        color: #ffffff !important;
+        background-color: #545748 !important;
+        border-left: 0.3rem solid #A3E241 !important;
+    }
+    section[data-testid="stSidebar"] {
+        background-color: #2F3A32 !important;
+        color: white;
+        padding: 20px;
+    }
+    section[data-testid="stSidebar"] h2 {
+        color: #DB9F75;
+    }
+    section[data-testid="stSidebar"] p {
+        color: #ffffff;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Data Preprocessing
-def preprocess_data(data):
-    X = data.drop('Outcome', axis=1)
-    y = data['Outcome']
-    
-    # Fill missing values with the mean of the column
-    X = X.fillna(X.mean())
-    
-    # Scaling the features
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    return X_scaled, y
-
-# Sidebar Configuration
+# Sidebar mode selector and safe ranges
 with st.sidebar:
     st.markdown("<h2>📝 Multiple Patient Diabetes Risk</h2>", unsafe_allow_html=True)
     mode = st.radio("📊 Select Data Mode", ["Static (Upload File)", "Dynamic (Multiple Patients)"])
-
+    
     st.markdown("<h3>Normal Ranges</h3>", unsafe_allow_html=True)
     st.markdown("""
     - Pregnancies: 0-10<br>
@@ -58,34 +78,58 @@ if mode == "Static (Upload File)":
     st.markdown("<p style='text-align: center; font-size: 18px;'>Upload trained dataset and new dataset to compare</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    uploaded_file = st.file_uploader("📤 Upload Diabetes Dataset CSV", type=["csv"], key="dataset_csv")
+    train_file = st.file_uploader("Upload Trained CSV File", type=["csv"], key="trained")
+    new_file = st.file_uploader("Upload New CSV File", type=["csv"], key="new")
 
-    if uploaded_file:
-        data = load_data(uploaded_file)
-        st.write(data.head())
+    if train_file and new_file:
+        train_data = pd.read_csv(train_file)
+        new_data = pd.read_csv(new_file)
 
-        # Preprocess the data
-        X_scaled, y = preprocess_data(data)
+        new_data = new_data.rename(columns={
+            "Blood Pressure": "BloodPressure",
+            "Diabetes Pedigree Function": "DiabetesPedigreeFunction"
+        })
 
-        # Split the data into training and testing
-        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        common_columns = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction']
+        parameter = st.selectbox("Select Parameter for Comparison", common_columns)
+        graph_type = st.selectbox("Select Graph Type", ["Box Plot", "Bar Chart", "Scatter Plot"])
 
-        # Train the XGBoost model
-        model = train_model(X_train, y_train)
+        if parameter in train_data.columns and parameter in new_data.columns:
+            comparison_df = pd.DataFrame({
+                "Dataset": ["Trained"] * len(train_data) + ["New"] * len(new_data),
+                parameter: list(train_data[parameter]) + list(new_data[parameter]),
+                "Patient Name": [""] * len(train_data) + list(new_data.get("Patient Name", ["Unknown"] * len(new_data)))
+            })
 
-        # Model Evaluation
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+            if graph_type == "Box Plot":
+                fig = px.box(comparison_df, x="Dataset", y=parameter, color="Dataset",
+                             title=f"Box Plot Comparison of {parameter}",
+                             template="plotly_dark", hover_data=["Patient Name"])
+            elif graph_type == "Bar Chart":
+                fig = px.bar(comparison_df, x="Dataset", y=parameter, color="Dataset",
+                             title=f"Bar Chart Comparison of {parameter}",
+                             template="plotly_dark", hover_data=["Patient Name"])
+            else:
+                fig = px.scatter(comparison_df, x="Dataset", y=parameter, color="Dataset",
+                                 title=f"Scatter Plot Comparison of {parameter}",
+                                 template="plotly_dark", hover_data=["Patient Name"])
 
-        # Confusion Matrix and Classification Report
-        cm = confusion_matrix(y_test, y_pred)
-        st.write("Confusion Matrix:")
-        st.write(cm)
+            fig.update_layout(
+                xaxis_title="Dataset",
+                yaxis_title=f"{parameter} Values",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True),
+                title_font=dict(size=20)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        report = classification_report(y_test, y_pred)
-        st.write("Classification Report:")
-        st.text(report)
+            st.markdown(f"### Summary Statistics for {parameter}")
+            st.write("Trained Dataset Stats:")
+            st.write(train_data[parameter].describe())
+            st.write("New Dataset Stats:")
+            st.write(new_data[parameter].describe())
+        else:
+            st.error(f"The selected parameter '{parameter}' is missing in one of the files.")
 
 # Dynamic Mode
 else:
@@ -132,14 +176,7 @@ else:
 
         if predict_button:
             df = pd.DataFrame(patients_data)
-            # Preprocess the dynamic input data
-            X_scaled, _ = preprocess_data(df)
-
-            # Train the XGBoost model (using the data already available)
-            model = train_model(X_scaled, y)
-
-            # Predicting diabetes risk
-            predictions = model.predict(X_scaled)
+            predictions = model.predict(df)
 
             df['Patient Name'] = names
             df['Risk (%)'] = predictions * 100
