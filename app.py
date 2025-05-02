@@ -200,3 +200,16 @@ else:
             )
 
             st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("## 🧾 Health Suggestions")
+
+            for index, row in df.iterrows():
+                name = row['Patient Name']
+                risk = row['Risk (%)']
+                st.markdown(f"**🧍‍♂️ {name}:** `{risk:.2f}%` risk")
+                if risk < 30:
+                    st.success("✅ Maintain current lifestyle, but continue regular health check-ups.")
+                elif 30 <= risk <= 70:
+                    st.warning("⚠️ Risk is moderate. Consider reviewing diet, weight, and activity levels.")
+                else:
+                    st.error("🚨 High risk! Please consult a healthcare provider immediately for further tests.")
